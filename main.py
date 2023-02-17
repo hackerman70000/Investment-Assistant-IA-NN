@@ -1,5 +1,9 @@
+import os
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
@@ -10,18 +14,22 @@ df = pd.read_csv('market_data.csv')
 df = df.sort_values(by="Open time")
 df.reset_index(drop=True, inplace=True)
 
-price_delta = 1.03
+price_delta = 1.01
 
 df = add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True)
 
-df['exp'] = np.where((df['Close'] * price_delta <= df['High'].shift(-1))
+df['exp'] = np.where(  (df['Close'] * price_delta <= df['High'].shift(-1))
                      | (df['Close'] * price_delta <= df['High'].shift(-2))
                      | (df['Close'] * price_delta <= df['High'].shift(-3))
                      | (df['Close'] * price_delta <= df['High'].shift(-4))
                      | (df['Close'] * price_delta <= df['High'].shift(-5))
-                     , 1, 0)
+                     | (df['Close'] * price_delta <= df['High'].shift(-6))
+                     | (df['Close'] * price_delta <= df['High'].shift(-7)),
+                     1, 0)
 
+print('\nCounts of expected values :')
 print(df['exp'].value_counts())
+
 df.drop(
     ['High', 'Open', 'Close', 'Low', 'Volume', 'Quote asset volume', 'Number of trades', 'Taker buy base asset volume',
      'Taker buy quote asset volume', 'Ignore', 'Open time', 'Close time'],
@@ -42,13 +50,12 @@ y = df_train['exp']
 x_pred = df_pred.iloc[:, :len(df_pred.columns) - 1]
 y_pred = df_pred['exp']
 
-print(x.info())
-
+print('\nNaNs occurences:')
 print(x.isnull().any().any())
 print(y.isnull().any().any())
-
 print(x_pred.isnull().any().any())
 print(y_pred.isnull().any().any())
+print(' ')
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, shuffle=True)
 
@@ -66,10 +73,33 @@ x_train_PCA = pca.transform(x_train_scaled)
 x_test_PCA = pca.transform(x_test_scaled)
 x_pred_PCA = pca.transform(x_pred_scaled)
 
-scaler.fit(x_train_PCA)
+# scaler.fit(x_train_PCA)
+#
+# x_train_scaled_PCA = scaler.transform(x_train_PCA)
+# x_test_scaled_PCA = scaler.transform(x_test_PCA)
+# x_pred_scaled_PCA = scaler.transform(x_pred_PCA)
 
-x_train_scaled_PCA = scaler.transform(x_train_PCA)
-x_test_scaled_PCA = scaler.transform(x_test_PCA)
-x_pred_scaled_PCA = scaler.transform(x_pred_PCA)
+model = tf.keras.Sequential(
+    [
+        tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.Dense(128, activation="relu"),
+        tf.keras.layers.Dense(32, activation="relu"),
+        tf.keras.layers.Dense(16, activation="relu"),
+        tf.keras.layers.Dense(1, activation="sigmoid"),
+    ]
+)
 
-print(x_train_scaled_PCA)
+model.compile(loss='binary_crossentropy', optimizer="Adam", metrics=[tf.keras.metrics.Precision()])
+
+model.fit(x_train_PCA, y_train, batch_size=1, epochs=1, validation_split=0.1, validation_data=None, shuffle=True)
+print("")
+
+evaluation = model.evaluate(x_test_PCA, y_test, batch_size=1)
+print("\ntest loss, test acc:", evaluation)
+print("")
+
+if not os.path.exists('saved_models'):
+    os.makedirs('saved_models')
+
+timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+model.save('saved_models/NN_'+str(round(evaluation[1]*100,1)) +'%_' + timestamp +'.h5')

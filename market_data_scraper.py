@@ -5,7 +5,7 @@ import datetime
 from requests.exceptions import RequestException
 
 symbol = "BTCUSDT"
-interval = "12h"
+interval = "1h"
 limit = 1000
 
 end_time = int(time.time() * 1000)
@@ -33,5 +33,4 @@ df = pd.DataFrame(data,
 df["Open time"] = pd.to_datetime(df["Open time"], unit='ms')
 df["Close time"] = pd.to_datetime(df["Close time"], unit='ms')
 
-df.fillna(df.mean(), inplace=True)
 df.to_csv('market_data.csv', index=False)
