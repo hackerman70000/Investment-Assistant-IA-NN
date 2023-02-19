@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -8,6 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from ta import add_all_ta_features
+import matplotlib.pyplot as plt
 
 df = pd.read_csv('market_data.csv')
 
@@ -37,9 +37,9 @@ df.drop(
 
 df.dropna(inplace=True)
 
-number_of_klines = 100
-df_train = df.iloc[:df.shape[0] - number_of_klines, :]
-df_pred = df.iloc[df.shape[0] - number_of_klines:, :]
+number_of_prediction_klines = 100
+df_train = df.iloc[:df.shape[0] - number_of_prediction_klines, :]
+df_pred = df.iloc[df.shape[0] - number_of_prediction_klines:, :]
 
 df_train.reset_index(drop=True, inplace=True)
 df_pred.reset_index(drop=True, inplace=True)
@@ -73,15 +73,10 @@ x_train_PCA = pca.transform(x_train_scaled)
 x_test_PCA = pca.transform(x_test_scaled)
 x_pred_PCA = pca.transform(x_pred_scaled)
 
-# scaler.fit(x_train_PCA)
-#
-# x_train_scaled_PCA = scaler.transform(x_train_PCA)
-# x_test_scaled_PCA = scaler.transform(x_test_PCA)
-# x_pred_scaled_PCA = scaler.transform(x_pred_PCA)
 
 model = tf.keras.Sequential(
     [
-        tf.keras.layers.Dropout(0.1),
+        #tf.keras.layers.Dropout(0.1),
         tf.keras.layers.Dense(128, activation="relu"),
         tf.keras.layers.Dense(32, activation="relu"),
         tf.keras.layers.Dense(16, activation="relu"),
@@ -91,7 +86,7 @@ model = tf.keras.Sequential(
 
 model.compile(loss='binary_crossentropy', optimizer="Adam", metrics=[tf.keras.metrics.Precision()])
 
-model.fit(x_train_PCA, y_train, batch_size=1, epochs=1, validation_split=0.1, validation_data=None, shuffle=True)
+model.fit(x_train_PCA, y_train, batch_size=1, epochs=10, validation_split=0.1, validation_data=None, shuffle=True)
 print("")
 
 evaluation = model.evaluate(x_test_PCA, y_test, batch_size=1)
@@ -103,3 +98,24 @@ if not os.path.exists('saved_models'):
 
 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 model.save('saved_models/NN_'+str(round(evaluation[1]*100,1)) +'%_' + timestamp +'.h5')
+
+predictions = pd.DataFrame(model.predict(x_pred_PCA),columns=['0-1'])
+predictions['target'] = y_pred
+predictions['predictions']  = np.where(predictions['0-1'] > 0.5,1 ,0)
+
+pd.set_option('display.max_rows', None)
+print(predictions)
+
+m = tf.keras.metrics.Precision()
+m.update_state(predictions['target'], predictions['predictions'])
+print("\nprecision :", end = ' ')
+print(m.result().numpy())
+
+print("\nNumber of decision taken :", end = ' ')
+print(predictions['predictions'].sum())
+
+print("\nPercentage of good decision taken :", end = ' ')
+print(predictions['predictions'].sum()/predictions['target'].sum())
+
+
+
