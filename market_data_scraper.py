@@ -34,3 +34,5 @@ df["Open time"] = pd.to_datetime(df["Open time"], unit='ms')
 df["Close time"] = pd.to_datetime(df["Close time"], unit='ms')
 
 df.to_csv('market_data.csv', index=False)
+
+print("Data has been successfully saved to market_data.csv")

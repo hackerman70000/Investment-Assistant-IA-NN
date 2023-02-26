@@ -24,6 +24,7 @@ df.reset_index(drop=True, inplace=True)
 
 price_delta = 1.01
 
+np.seterr(divide='ignore', invalid='ignore')
 df = add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True)
 
 df['exp'] = np.where(  (df['Close'] * price_delta <= df['High'].shift(-1))
