@@ -48,22 +48,22 @@ df.dropna(inplace=True)
 
 number_of_prediction_klines = 100
 df_train = df.iloc[:df.shape[0] - number_of_prediction_klines, :]
-df_pred = df.iloc[df.shape[0] - number_of_prediction_klines:, :]
+df_dev = df.iloc[df.shape[0] - number_of_prediction_klines:, :]
 
 df_train.reset_index(drop=True, inplace=True)
-df_pred.reset_index(drop=True, inplace=True)
+df_dev.reset_index(drop=True, inplace=True)
 
 x = df_train.iloc[:, :len(df.columns) - 1]
 y = df_train['exp']
 
-x_pred = df_pred.iloc[:, :len(df_pred.columns) - 1]
-y_pred = df_pred['exp']
+x_dev = df_dev.iloc[:, :len(df_dev.columns) - 1]
+y_dev = df_dev['exp']
 
 print('\nNaNs occurences:')
 print(x.isnull().any().any())
 print(y.isnull().any().any())
-print(x_pred.isnull().any().any())
-print(y_pred.isnull().any().any())
+print(x_dev.isnull().any().any())
+print(y_dev.isnull().any().any())
 print(' ')
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, shuffle=True)
@@ -74,7 +74,7 @@ joblib.dump(scaler, 'saved_models/model_' + timestamp + '/scaler.joblib')
 
 x_train_scaled = scaler.transform(x_train)
 x_test_scaled = scaler.transform(x_test)
-x_pred_scaled = scaler.transform(x_pred)
+x_dev_scaled = scaler.transform(x_dev)
 
 pca = PCA(n_components=16)
 pca.fit(x_train_scaled)
@@ -82,7 +82,7 @@ joblib.dump(pca, 'saved_models/model_' + timestamp + '/pca.joblib')
 
 x_train_PCA = pca.transform(x_train_scaled)
 x_test_PCA = pca.transform(x_test_scaled)
-x_pred_PCA = pca.transform(x_pred_scaled)
+x_dev_PCA = pca.transform(x_dev_scaled)
 
 model = tf.keras.Sequential(
     [
@@ -105,8 +105,8 @@ print("")
 
 model.save('saved_models/model_' + timestamp + '/NN_' + str(round(evaluation[1] * 100, 1)) + '%_' + timestamp + '.h5')
 
-predictions = pd.DataFrame(model.predict(x_pred_PCA), columns=['0-1'])
-predictions['target'] = y_pred
+predictions = pd.DataFrame(model.predict(x_dev_PCA), columns=['0-1'])
+predictions['target'] = y_dev
 predictions['predictions'] = np.where(predictions['0-1'] > 0.5, 1, 0)
 
 pd.set_option('display.max_rows', None)
