@@ -11,7 +11,7 @@ from requests.exceptions import RequestException
 from ta import add_all_ta_features
 
 symbol = "BTCUSDT"
-interval = "12h"
+interval = "1h"
 limit = 1000
 tz = pytz.timezone('Europe/Warsaw')
 end_time = int(time.time() * 1000)
@@ -46,7 +46,9 @@ df.to_csv('prediction_data.csv', index=False)
 print("\nData has been successfully downloaded\n")
 
 last_datetime = pd.to_datetime(df.iloc[-1]['Close time'])
-print(f"The last date and time in the file is: {last_datetime}\n")
+last_datetime = last_datetime.replace(microsecond=0, tzinfo=None)
+valid_until = last_datetime + pd.Timedelta(interval)
+valid_until = valid_until.replace(microsecond=0, tzinfo=None)
 
 df = pd.read_csv('prediction_data.csv')
 
@@ -64,7 +66,6 @@ df.drop(
 df.dropna(inplace=True)
 
 x_pred = df.iloc[df.shape[0] - 1:, :]
-print(x_pred)
 
 pca = load('prediction_model/pca.joblib')
 scaler = load('prediction_model/scaler.joblib')
@@ -76,6 +77,9 @@ if os.path.exists('prediction_model/prediction_model.h5'):
     model = tf.keras.models.load_model('prediction_model/prediction_model.h5')
 
     y_pred = model.predict(x_pred_PCA)
-    print(y_pred[0])
+    print("Prediction is valid since:", last_datetime.strftime('%Y-%m-%d %H:%M:%S'))
+    print("Prediction is valid until:", valid_until.strftime('%Y-%m-%d %H:%M:%S'))
+    print("Prediction: {:.4f}".format(y_pred[0].item()))
+
 else:
     print("Error: Model file not found")
