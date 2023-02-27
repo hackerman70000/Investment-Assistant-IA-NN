@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -11,13 +10,14 @@ from sklearn.preprocessing import MinMaxScaler
 from ta import add_all_ta_features
 
 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+interval = "1h"
 
 if not os.path.exists('saved_models'):
     os.makedirs('saved_models')
 
 os.makedirs('saved_models/model_' + timestamp)
 
-df = pd.read_csv('market_data.csv')
+df = pd.read_csv(f'market_data_{interval}.csv')
 
 df = df.sort_values(by="Open time")
 df.reset_index(drop=True, inplace=True)
@@ -27,7 +27,7 @@ price_delta = 1.01
 np.seterr(divide='ignore', invalid='ignore')
 df = add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True)
 
-df['exp'] = np.where(  (df['Close'] * price_delta <= df['High'].shift(-1))
+df['exp'] = np.where((df['Close'] * price_delta <= df['High'].shift(-1))
                      | (df['Close'] * price_delta <= df['High'].shift(-2))
                      | (df['Close'] * price_delta <= df['High'].shift(-3))
                      | (df['Close'] * price_delta <= df['High'].shift(-4))
@@ -45,7 +45,6 @@ df.drop(
     inplace=True, axis=1)
 
 df.dropna(inplace=True)
-
 
 number_of_prediction_klines = 100
 df_train = df.iloc[:df.shape[0] - number_of_prediction_klines, :]

@@ -2,17 +2,18 @@ import datetime
 import os
 import time
 import numpy as np
-from joblib import load
-from ta import add_all_ta_features
 import pandas as pd
+import pytz
 import requests
 import tensorflow as tf
+from joblib import load
 from requests.exceptions import RequestException
+from ta import add_all_ta_features
 
 symbol = "BTCUSDT"
-interval = "1h"
+interval = "12h"
 limit = 1000
-
+tz = pytz.timezone('Europe/Warsaw')
 end_time = int(time.time() * 1000)
 start_time = int(datetime.datetime(2021, 2, 28).timestamp() * 1000)
 
@@ -35,8 +36,10 @@ df = pd.DataFrame(data,
                   columns=["Open time", "Open", "High", "Low", "Close", "Volume", "Close time", "Quote asset volume",
                            "Number of trades", "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore"])
 
-df["Open time"] = pd.to_datetime(df["Open time"], unit='ms')
-df["Close time"] = pd.to_datetime(df["Close time"], unit='ms')
+df["Open time"] = pd.to_datetime(df["Open time"], unit='ms').dt.tz_localize(pytz.utc).dt.tz_convert(tz)
+df["Close time"] = pd.to_datetime(df["Close time"], unit='ms').dt.tz_localize(pytz.utc).dt.tz_convert(tz)
+
+df = df.drop(df.index[-1])
 
 df.to_csv('prediction_data.csv', index=False)
 
@@ -73,6 +76,6 @@ if os.path.exists('prediction_model/prediction_model.h5'):
     model = tf.keras.models.load_model('prediction_model/prediction_model.h5')
 
     y_pred = model.predict(x_pred_PCA)
-    print(y_pred)
+    print(y_pred[0])
 else:
     print("Error: Model file not found")
