@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -11,11 +12,12 @@ from ta import add_all_ta_features
 
 timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 interval = "1h"
+dir_name = 'saved_models/model_' + timestamp
 
 if not os.path.exists('saved_models'):
     os.makedirs('saved_models')
 
-os.makedirs('saved_models/model_' + timestamp)
+os.makedirs(dir_name)
 
 df = pd.read_csv(f'market_data_{interval}.csv')
 
@@ -70,7 +72,7 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, shuffle
 
 scaler = MinMaxScaler(feature_range=(0, 1))
 scaler.fit(x_train)
-joblib.dump(scaler, 'saved_models/model_' + timestamp + '/scaler.joblib')
+joblib.dump(scaler, dir_name + '/scaler.joblib')
 
 x_train_scaled = scaler.transform(x_train)
 x_test_scaled = scaler.transform(x_test)
@@ -78,7 +80,7 @@ x_dev_scaled = scaler.transform(x_dev)
 
 pca = PCA(n_components=16)
 pca.fit(x_train_scaled)
-joblib.dump(pca, 'saved_models/model_' + timestamp + '/pca.joblib')
+joblib.dump(pca, dir_name + '/pca.joblib')
 
 x_train_PCA = pca.transform(x_train_scaled)
 x_test_PCA = pca.transform(x_test_scaled)
@@ -103,7 +105,18 @@ evaluation = model.evaluate(x_test_PCA, y_test, batch_size=1)
 print("\ntest loss, test acc:", evaluation)
 print("")
 
-model.save('saved_models/model_' + timestamp + '/NN_' + str(round(evaluation[1] * 100, 1)) + '%_' + timestamp + '.h5')
+model.save(dir_name + '/NN_' + str(round(evaluation[1] * 100, 1)) + '%' + '.h5')
+
+new_dir_name = 'saved_models/model_' + str(round(evaluation[1] * 100, 1)) + '%_' + timestamp
+
+try:
+    os.rename(dir_name, new_dir_name)
+except FileNotFoundError:
+    print(f"Directory '{dir_name}' not found")
+except FileExistsError:
+    print(f"Directory '{new_dir_name}' already exists")
+except OSError as e:
+    print(f"Error: {e}")
 
 predictions = pd.DataFrame(model.predict(x_dev_PCA), columns=['0-1'])
 predictions['target'] = y_dev
@@ -117,15 +130,22 @@ m.update_state(predictions['target'], predictions['predictions'])
 
 precision = round(m.result().numpy(), 1)
 num_decisions = predictions['predictions'].sum()
-pct_good_decisions = str(round(num_decisions / len(predictions['predictions']), 1))
+num_good_decision = len(predictions[(predictions['predictions'] == 1) & (predictions['target'] == 1)])
+num_bad_decision = len(predictions[(predictions['predictions'] == 1) & (predictions['target'] == 0)])
 
-print("\nprecision : " + str(precision))
-print("\nNumber of decision taken : " + str(num_decisions))
-print("\nPercentage of good decision taken : " + pct_good_decisions)
+print("\nPrecision : " + str(precision))
+print("Number of decision taken : " + str(num_decisions))
+print("Number of good decision taken : " + str(num_good_decision))
+print("Number of bad decision taken : " + str(num_bad_decision))
 
-with open('saved_models/model_' + timestamp + '/results.txt', 'w') as f:
-    f.write(f"Precision: {precision}\n")
-    f.write(f"Number of decisions taken: {num_decisions}\n")
-    f.write(f"Percentage of good decisions taken: {pct_good_decisions}\n")
+with open(new_dir_name + '/results.txt', 'w') as f:
+    f.write(f"Interval: {interval}\n")
+    f.write(f"PCA n_components: {pca.n_components}\n")
+    model.summary(print_fn=lambda x: f.write(x + '\n'))
+    f.write(f"Precision: {precision}")
+    f.write(f"Number of decisions taken: {num_decisions}")
+    f.write(f"Number of good decisions taken: {num_good_decision}")
+    f.write(f"Number of bad decisions taken: {num_bad_decision}")
+
 
 f.close()
