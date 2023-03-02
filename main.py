@@ -48,7 +48,7 @@ df.drop(
 
 df.dropna(inplace=True)
 
-number_of_prediction_klines = 100
+number_of_prediction_klines = 1000
 df_train = df.iloc[:df.shape[0] - number_of_prediction_klines, :]
 df_dev = df.iloc[df.shape[0] - number_of_prediction_klines:, :]
 
@@ -62,11 +62,14 @@ x_dev = df_dev.iloc[:, :len(df_dev.columns) - 1]
 y_dev = df_dev['exp']
 
 print('\nNaNs occurences:')
-print(x.isnull().any().any())
-print(y.isnull().any().any())
-print(x_dev.isnull().any().any())
-print(y_dev.isnull().any().any())
-print(' ')
+data_frames = {'x': x, 'y': y, 'x_dev': x_dev, 'y_dev': y_dev}
+for name, df in data_frames.items():
+    n_missing = df.isnull().sum().sum()
+    if n_missing > 0:
+        print(f"{name}: {n_missing} missing values")
+    else:
+        print(f"{name}: No missing values")
+print('')
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, shuffle=True)
 
@@ -125,6 +128,8 @@ predictions['predictions'] = np.where(predictions['0-1'] > 0.5, 1, 0)
 pd.set_option('display.max_rows', None)
 print(predictions)
 
+predictions.to_csv(new_dir_name + '/predictions.csv', index=False)
+
 m = tf.keras.metrics.Precision()
 m.update_state(predictions['target'], predictions['predictions'])
 
@@ -142,10 +147,22 @@ with open(new_dir_name + '/results.txt', 'w') as f:
     f.write(f"Interval: {interval}\n")
     f.write(f"PCA n_components: {pca.n_components}\n")
     model.summary(print_fn=lambda x: f.write(x + '\n'))
-    f.write(f"Precision: {precision}")
-    f.write(f"Number of decisions taken: {num_decisions}")
-    f.write(f"Number of good decisions taken: {num_good_decision}")
-    f.write(f"Number of bad decisions taken: {num_bad_decision}")
-
+    f.write(f"Precision: {precision}\n")
+    f.write(f"Precision: {str(round(evaluation[1] * 100, 1))}\n")
+    f.write(f"Number of decisions taken: {num_decisions}\n")
+    f.write(f"Number of good decisions taken: {num_good_decision}\n")
+    f.write(f"Number of bad decisions taken: {num_bad_decision}\n")
 
 f.close()
+
+final_dir_name = 'saved_models/model_P-' +str(round(precision * 100, 1))+ '%_'+'T-'+ str(round(evaluation[1] * 100, 1)) + '%'
+
+try:
+    os.rename(new_dir_name, final_dir_name)
+except FileNotFoundError:
+    print(f"Directory '{new_dir_name}' not found")
+except FileExistsError:
+    print(f"Directory '{final_dir_name}' already exists")
+    os.rename(new_dir_name, final_dir_name + timestamp)
+except OSError as e:
+    print(f"Error: {e}")
