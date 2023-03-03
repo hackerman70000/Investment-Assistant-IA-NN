@@ -5,6 +5,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from keras.callbacks import EarlyStopping
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
@@ -99,9 +100,12 @@ model = tf.keras.Sequential(
     ]
 )
 
+early_stopping = EarlyStopping(monitor='val_loss', patience=5)
+
 model.compile(loss='binary_crossentropy', optimizer="Adam", metrics=[tf.keras.metrics.Precision()])
 
-model.fit(x_train_PCA, y_train, batch_size=1, epochs=1, validation_split=0.1, validation_data=None, shuffle=True)
+model.fit(x_train_PCA, y_train, batch_size=1, epochs=100, validation_split=0.2, validation_data=None, shuffle=True,
+          callbacks=[early_stopping])
 print("")
 
 evaluation = model.evaluate(x_test_PCA, y_test, batch_size=1)
@@ -137,11 +141,13 @@ precision = round(m.result().numpy(), 1)
 num_decisions = predictions['predictions'].sum()
 num_good_decision = len(predictions[(predictions['predictions'] == 1) & (predictions['target'] == 1)])
 num_bad_decision = len(predictions[(predictions['predictions'] == 1) & (predictions['target'] == 0)])
+num_opportunities = len(predictions['target'] == 1)
 
 print("\nPrecision : " + str(precision))
 print("Number of decision taken : " + str(num_decisions))
 print("Number of good decision taken : " + str(num_good_decision))
 print("Number of bad decision taken : " + str(num_bad_decision))
+print("Number of opportunities : " + str(num_opportunities))
 
 with open(new_dir_name + '/results.txt', 'w') as f:
     f.write(f"Interval: {interval}\n")
@@ -152,10 +158,11 @@ with open(new_dir_name + '/results.txt', 'w') as f:
     f.write(f"Number of decisions taken: {num_decisions}\n")
     f.write(f"Number of good decisions taken: {num_good_decision}\n")
     f.write(f"Number of bad decisions taken: {num_bad_decision}\n")
+    f.write(f"Number of opportunities: {num_opportunities}\n")
 
 f.close()
 
-final_dir_name = 'saved_models/model_P-' +str(round(precision * 100, 1))+ '%_'+'T-'+ str(round(evaluation[1] * 100, 1)) + '%'
+final_dir_name = 'saved_models/model_P-' + str(round(precision * 100, 1)) + '%_' + 'T-' + str(round(evaluation[1] * 100, 1)) + '%'
 
 try:
     os.rename(new_dir_name, final_dir_name)
