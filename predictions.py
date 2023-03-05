@@ -1,6 +1,7 @@
 import datetime
 import os
 import time
+
 import numpy as np
 import pandas as pd
 import pytz
@@ -13,7 +14,7 @@ from ta import add_all_ta_features
 symbol = "BTCUSDT"
 interval = "1h"
 price_delta = 1.01
-num_intervals = 7
+num_intervals = 12
 timezone = pytz.timezone('Europe/Warsaw')
 
 url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={1000}"
@@ -84,15 +85,24 @@ url_price = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
 response = requests.get(url_price).json()
 price = float(response["price"])
 
-if os.path.exists('prediction_model/prediction_model.h5'):
-    model = tf.keras.models.load_model('prediction_model/prediction_model.h5')
+if os.path.exists('prediction_model'):
+    models = []
+    for file_name in os.listdir('prediction_model'):
+        if file_name.endswith('.h5'):
+            model_path = os.path.join('prediction_model', file_name)
+            model = tf.keras.models.load_model(model_path)
+            models.append(model)
 
-    y_pred = model.predict(x_pred_PCA)
-    print(f"\nPrediction is valid within the time frame: {last_datetime:%Y-%m-%d %H:%M:%S} - {valid_until:%Y-%m-%d %H:%M:%S}")
-    print(f"Sell within time frame:                    {last_datetime:%Y-%m-%d %H:%M:%S} - {(last_datetime + total_delta):%Y-%m-%d %H:%M:%S}")
-    print(f"Prediction: {y_pred[0].item():.4f}")
-    print(f"Current BTC/USDT price: {price}")
-    print(f"Target price (sell): {entry_price * price_delta}")
+    for model in models:
+        y_pred = model.predict(x_pred_PCA)
+        print(f"Prediction: {y_pred[0].item():.4f}")
 
 else:
-    print("\nError: Model file not found")
+    print("\nError: Model directory not found")
+
+print(
+    f"\nPrediction is valid within the time frame: {last_datetime:%Y-%m-%d %H:%M:%S} - {valid_until:%Y-%m-%d %H:%M:%S}")
+print(
+    f"Sell within time frame:                    {last_datetime:%Y-%m-%d %H:%M:%S} - {(last_datetime + total_delta):%Y-%m-%d %H:%M:%S}")
+print(f"Current BTC/USDT price: {price}")
+print(f"Target price (sell): {entry_price * price_delta}")

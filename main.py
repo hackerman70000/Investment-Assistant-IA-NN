@@ -93,7 +93,7 @@ x_dev_PCA = pca.transform(x_dev_scaled)
 
 model = tf.keras.Sequential(
     [
-        # tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.Dropout(0.1),
         tf.keras.layers.Dense(128, activation="relu"),
         tf.keras.layers.Dense(32, activation="relu"),
         tf.keras.layers.Dense(16, activation="relu"),
@@ -159,8 +159,8 @@ with open(new_dir_name + '/results.txt', 'w') as f:
 
 f.close()
 
-final_dir_name = 'saved_models/model_P-' + str(round(precision * 100, 1)) + '%_' + 'T-' + str(
-    round(evaluation[1] * 100, 1)) + '%'
+final_dir_name = 'saved_models/model_P-' + str(round(precision * 100, 2)) + '%_' + 'O-' + str(
+    round(pct_good_decision * 100, 2)) + '%'
 
 try:
     os.rename(new_dir_name, final_dir_name)
@@ -168,6 +168,6 @@ except FileNotFoundError:
     print(f"Directory '{new_dir_name}' not found")
 except FileExistsError:
     print(f"Directory '{final_dir_name}' already exists")
-    os.rename(new_dir_name, final_dir_name + timestamp)
+    os.rename(new_dir_name, final_dir_name + '_' + timestamp)
 except OSError as e:
     print(f"Error: {e}")
