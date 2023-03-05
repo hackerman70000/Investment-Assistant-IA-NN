@@ -36,6 +36,9 @@ df = pd.DataFrame(data,
 df["Open time"] = pd.to_datetime(df["Open time"], unit='ms').dt.tz_localize(pytz.utc).dt.tz_convert(timezone)
 df["Close time"] = pd.to_datetime(df["Close time"], unit='ms').dt.tz_localize(pytz.utc).dt.tz_convert(timezone)
 
-df.to_csv(f'market_data_{interval}.csv', index=False)
+try:
+    df.to_csv(f'market_data_{interval}.csv', index=False)
+    print(f"Data has been successfully saved to market_data_{interval}.csv")
+except Exception as e:
+    print(f"Error saving data to market_data_{interval}.csv: {e}")
 
-print(f"Data has been successfully saved to market_data_{interval}.csv")
