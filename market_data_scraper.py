@@ -14,7 +14,7 @@ timezone = pytz.timezone('Europe/Warsaw')
 end_time = int(time.time() * 1000)
 start_time = int(datetime.datetime(2021, 2, 28, tzinfo=pytz.utc).astimezone(timezone).timestamp() * 1000)
 
-url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+url = f"https://data.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={1000}"
 data = []
 
 while start_time < end_time:

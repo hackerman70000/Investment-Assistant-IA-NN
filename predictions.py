@@ -13,11 +13,11 @@ from ta import add_all_ta_features
 
 symbol = "BTCUSDT"
 interval = "1h"
-price_delta = 1.01
+price_delta = 1.015
 num_intervals = 12
 timezone = pytz.timezone('Europe/Warsaw')
 
-url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={1000}"
+url = f"https://data.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={1000}"
 data = []
 
 end_time = int(time.time() * 1000)
@@ -34,6 +34,8 @@ while start_time < end_time:
         print("Error occurred:", e)
         time.sleep(60)
 
+print("\nData has been successfully downloaded\n")
+
 df = pd.DataFrame(data,
                   columns=["Open time", "Open", "High", "Low", "Close", "Volume", "Close time", "Quote asset volume",
                            "Number of trades", "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore"])
@@ -46,12 +48,8 @@ entry_price = pd.to_numeric(df.iloc[-1]['Close'])
 
 df.to_csv('prediction_data.csv', index=False)
 
-print("\nData has been successfully downloaded\n")
-
-last_datetime = pd.to_datetime(df.iloc[-1]['Close time'])
+last_datetime = pd.to_datetime(df.iloc[-1]['Close time']) + datetime.timedelta(seconds=1)
 last_datetime = last_datetime.replace(microsecond=0, tzinfo=None)
-valid_until = last_datetime + pd.Timedelta(interval)
-valid_until = valid_until.replace(microsecond=0, tzinfo=None)
 
 interval_units = {"m": "minutes", "h": "hours", "d": "days", "w": "weeks", "M": "months", "y": "years"}
 interval_unit = interval[-1]
@@ -81,10 +79,6 @@ scaler = load('prediction_model/scaler.joblib')
 x_pred_scaled = scaler.transform(x_pred)
 x_pred_PCA = pca.transform(x_pred_scaled)
 
-url_price = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-response = requests.get(url_price).json()
-price = float(response["price"])
-
 if os.path.exists('prediction_model'):
     models = []
     for file_name in os.listdir('prediction_model'):
@@ -101,8 +95,17 @@ else:
     print("\nError: Model directory not found")
 
 print(
-    f"\nPrediction is valid within the time frame: {last_datetime:%Y-%m-%d %H:%M:%S} - {valid_until:%Y-%m-%d %H:%M:%S}")
+    f"\nPrediction is valid at: {last_datetime:%Y-%m-%d %H:%M:%S}")
 print(
-    f"Sell within time frame:                    {last_datetime:%Y-%m-%d %H:%M:%S} - {(last_datetime + total_delta):%Y-%m-%d %H:%M:%S}")
-print(f"Current BTC/USDT price: {price}")
-print(f"Target price (sell): {entry_price * price_delta}")
+    f"Sell within time frame: {last_datetime:%Y-%m-%d %H:%M:%S} - {(last_datetime + total_delta):%Y-%m-%d %H:%M:%S}")
+
+url_price_USDT = "https://data.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+response = requests.get(url_price_USDT).json()
+price_USDT = float(response["price"])
+
+url_price_BUSD = "https://data.binance.com/api/v3/ticker/price?symbol=BTCBUSD"
+response = requests.get(url_price_BUSD).json()
+price_BUSD = float(response["price"])
+
+print(f"\nTarget price USDT: {round(price_USDT * price_delta, 2)}")
+print(f"Target price BUSD: {round(price_BUSD * price_delta, 2)}")
