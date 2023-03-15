@@ -73,26 +73,24 @@ df.dropna(inplace=True)
 
 x_pred = df.iloc[df.shape[0] - 1:, :]
 
-pca = load('prediction_model/pca.joblib')
-scaler = load('prediction_model/scaler.joblib')
+pca = load('IA-NN-models/pca.joblib')
+scaler = load('IA-NN-models/scaler.joblib')
 
 x_pred_scaled = scaler.transform(x_pred)
 x_pred_PCA = pca.transform(x_pred_scaled)
 
-if os.path.exists('prediction_model'):
-    models = []
-    for file_name in os.listdir('prediction_model'):
+
+
+if os.path.exists('IA-NN-models'):
+    for file_name in os.listdir('IA-NN-models'):
         if file_name.endswith('.h5'):
-            model_path = os.path.join('prediction_model', file_name)
+            model_path = os.path.join('IA-NN-models', file_name)
             model = tf.keras.models.load_model(model_path)
-            models.append(model)
-
-    for model in models:
-        y_pred = model.predict(x_pred_PCA)
-        print(f"Prediction: {y_pred[0].item():.4f}")
-
+            y_pred = model.predict(x_pred_PCA)
+            print(f"Prediction from {file_name}: {y_pred[0].item():.4f}")
 else:
     print("\nError: Model directory not found")
+
 
 print(
     f"\nPrediction is valid at: {last_datetime:%Y-%m-%d %H:%M:%S}")
