@@ -79,8 +79,6 @@ scaler = load('IA-NN-models/scaler.joblib')
 x_pred_scaled = scaler.transform(x_pred)
 x_pred_PCA = pca.transform(x_pred_scaled)
 
-
-
 if os.path.exists('IA-NN-models'):
     for file_name in os.listdir('IA-NN-models'):
         if file_name.endswith('.h5'):
@@ -90,7 +88,6 @@ if os.path.exists('IA-NN-models'):
             print(f"Prediction from {file_name}: {y_pred[0].item():.4f}")
 else:
     print("\nError: Model directory not found")
-
 
 print(
     f"\nPrediction is valid at: {last_datetime:%Y-%m-%d %H:%M:%S}")
