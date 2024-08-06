@@ -13,6 +13,8 @@ import calendar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
+from config import DAILY_INTERVALS, MONTHLY_INTERVALS, EARLIEST_DATE, MONTHLY_BASE_URL, DAILY_BASE_URL
+
 def setup_logging(log_file: str = 'logs/scrape.log'):
     log_dir = os.path.dirname(log_file)
     os.makedirs(log_dir, exist_ok=True)
@@ -27,11 +29,11 @@ def setup_logging(log_file: str = 'logs/scrape.log'):
     )
 
 class Scraper:
-    DAILY_INTERVALS: frozenset = frozenset(["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"])
-    MONTHLY_INTERVALS: frozenset = frozenset(["1d", "3d", "1w", "1mo"])
-    EARLIEST_DATE: datetime = datetime(2017, 8, 17)
-    BASE_URL: str = "https://data.binance.vision/data/spot/monthly/klines"
-    DAILY_BASE_URL: str = "https://data.binance.vision/data/spot/daily/klines"
+    DAILY_INTERVALS: frozenset = DAILY_INTERVALS
+    MONTHLY_INTERVALS: frozenset = MONTHLY_INTERVALS
+    EARLIEST_DATE: datetime = datetime.strptime(EARLIEST_DATE, "%Y-%m-%d")
+    MONTHLY_BASE_URL: str = MONTHLY_BASE_URL
+    DAILY_BASE_URL: str = DAILY_BASE_URL
 
     def __init__(self, symbol: str = "BTCUSDT", interval: str = "1d", start_date: datetime = EARLIEST_DATE, end_date: Optional[datetime] = None, directory: str = "data/raw", verify_checksum: bool = False):
         self.symbol: str = symbol.upper()
@@ -63,7 +65,7 @@ class Scraper:
 
         while current_month < end_month:
             year, month = current_month.year, current_month.month
-            url: str = f"{self.BASE_URL}/{self.symbol}/{self.interval}/{self.symbol}-{self.interval}-{year}-{month:02d}.zip"
+            url: str = f"{self.MONTHLY_BASE_URL}/{self.symbol}/{self.interval}/{self.symbol}-{self.interval}-{year}-{month:02d}.zip"
             
             if self.check_url_exists(url):
                 urls.append(url)
@@ -140,7 +142,6 @@ class Scraper:
         df['Open time'] = pd.to_datetime(df['Open time'], unit='ms')
         df['Close time'] = pd.to_datetime(df['Close time'], unit='ms')
         
-        # Filter the dataframe to include only rows from the start_date onwards
         df = df[df['Open time'] >= self.start_date]
         
         return df
@@ -198,7 +199,7 @@ class Scraper:
         filename = f"{self.symbol}_{self.interval}_{start_date}_{end_date}.csv"
         path = os.path.join(self.directory, filename)
         try:
-            os.makedirs(self.directory, exist_ok=True)  # Ensure the directory exists
+            os.makedirs(self.directory, exist_ok=True)
             self.data.to_csv(path, index=False)
             logging.info(f"Data has been successfully saved to {path}")
         except IOError as e:

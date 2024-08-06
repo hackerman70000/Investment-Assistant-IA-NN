@@ -3,30 +3,30 @@
 ## Project structure
 
 IA-NN/
-├── data/
-│ ├── raw/  
-│ ├── processed/  
-│ └── models/  
+├── data/ ☑
+│ ├── raw/ ☑
+│ ├── processed/ ☑  
+│ └── models/ ☑
 ├── src/  
-│ ├── scraper/  
-│ │ ├── **init**.py?
-│ │ ├── scrape.py
-│ │ └── config.py?
+│ ├── scraper/ ☑  
+│ │ ├── **init**.py ☑
+│ │ ├── scrape.py ☑
+│ │ └── config.py ☑
 │ ├── training/  
 │ │ ├── **init**.py?
-│ │ ├── train.py
+│ │ ├── train.py ☑
 │ │ ├── model.py?
 │ │ └── preprocessing.py?
 │ └── prediction/  
 │ ├── **init**.py?
-│ ├── predict.py
+│ ├── predict.py ☑
 │ └── postprocessing.py?
 ├── tests/  
 │ ├── scraper_tests/  
 │ ├── training_tests/
 │ └── prediction_tests/
 ├── logs/  
-│ ├── scrape.log
+│ ├── scrape.log ☑
 │ ├── train.log
 │ └── predict.log
 ├── notebooks/  
@@ -35,7 +35,7 @@ IA-NN/
 │ ├── run_training.py
 │ └── run_prediction.py
 |-- .gitignore
-|-- README.md
+|-- README.md ☑
 |-- requirements.txt
 |-- setup.py
 
