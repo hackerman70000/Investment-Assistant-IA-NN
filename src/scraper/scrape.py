@@ -13,7 +13,18 @@ import calendar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def setup_logging(log_file: str = 'logs/scrape.log'):
+    log_dir = os.path.dirname(log_file)
+    os.makedirs(log_dir, exist_ok=True)
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
 
 class Scraper:
     DAILY_INTERVALS: frozenset = frozenset(["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"])
@@ -35,10 +46,13 @@ class Scraper:
 
     def validate_inputs(self) -> None:
         if self.interval not in self.DAILY_INTERVALS.union(self.MONTHLY_INTERVALS):
+            logging.error(f"Invalid interval: {self.interval}")
             raise ValueError(f"Invalid interval: {self.interval}")
         if self.start_date < self.EARLIEST_DATE:
+            logging.error(f"Invalid start date: {self.start_date}. Data is only available from {self.EARLIEST_DATE}")
             raise ValueError(f"Invalid start date: {self.start_date}. Data is only available from {self.EARLIEST_DATE}")
         if self.start_date >= self.end_date:
+            logging.error("Start date must be before end date")
             raise ValueError("Start date must be before end date")
 
     def generate_urls(self) -> List[str]:
@@ -159,6 +173,7 @@ class Scraper:
         urls = self.generate_urls()
         os.makedirs(self.directory, exist_ok=True)
 
+        logging.info(f"Starting data scraping for {self.symbol} from {self.start_date} to {self.end_date}")
         with ThreadPoolExecutor(max_workers=5) as executor:
             future_to_url = {executor.submit(self.download_and_process_url, url): url for url in urls}
             for future in tqdm(as_completed(future_to_url), total=len(urls), desc="Processing files", unit="file"):
@@ -192,21 +207,28 @@ class Scraper:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scrape market data from Binance")
     parser.add_argument("--symbol", type=str, default="BTCUSDT", help="Trading symbol")
-    parser.add_argument("--interval", type=str, default="1w", help="Data interval")
+    parser.add_argument("--interval", type=str, default="1d", help="Data interval")
     parser.add_argument("--start_date", type=lambda s: datetime.strptime(s, "%Y-%m-%d"), default=Scraper.EARLIEST_DATE, help="Start date in YYYY-MM-DD format")
     parser.add_argument("--end_date", type=lambda s: datetime.strptime(s, "%Y-%m-%d"), default=datetime.now(), help="End date in YYYY-MM-DD format")
     parser.add_argument("--directory", type=str, default="data/raw", help="Directory to save data")
     parser.add_argument("--verify_checksum", action="store_true", help="Verify checksum of downloaded files")
+    parser.add_argument("--log_file", type=str, default="logs/scrape.log", help="Path to log file")
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_arguments()
-    scraper = Scraper(
-        symbol=args.symbol,
-        interval=args.interval,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        directory=args.directory,
-        verify_checksum=args.verify_checksum
-    )
-    scraper.run()
+    setup_logging(args.log_file)
+    logging.info("Starting Binance data scraper")
+    try:
+        scraper = Scraper(
+            symbol=args.symbol,
+            interval=args.interval,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            directory=args.directory,
+            verify_checksum=args.verify_checksum
+        )
+        scraper.run()
+    except Exception as e:
+        logging.exception(f"An error occurred during scraping: {e}")
+    logging.info("Scraping process completed")
