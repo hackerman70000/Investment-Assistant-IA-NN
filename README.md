@@ -2,42 +2,42 @@
 
 ## Project structure
 
-IA-NN/
-├── data/ ☑
-│ ├── raw/ ☑
+IA-NN/  
+├── data/ ☑  
+│ ├── raw/ ☑  
 │ ├── processed/ ☑  
-│ └── models/ ☑
+│ └── models/ ☑  
 ├── src/  
 │ ├── scraper/ ☑  
-│ │ ├── **init**.py ☑
-│ │ ├── scrape.py ☑
-│ │ └── config.py ☑
+│ │ ├── **init**.py ☑  
+│ │ ├── scrape.py ☑  
+│ │ └── config.py ☑  
 │ ├── training/  
-│ │ ├── **init**.py?
-│ │ ├── train.py ☑
-│ │ ├── model.py?
-│ │ └── preprocessing.py?
+│ │ ├── **init**.py?  
+│ │ ├── train.py ☑  
+│ │ ├── model.py?  
+│ │ └── preprocessing.py?  
 │ └── prediction/  
-│ ├── **init**.py?
-│ ├── predict.py ☑
-│ └── postprocessing.py?
+│ ├── **init**.py?  
+│ ├── predict.py ☑  
+│ └── postprocessing.py?  
 ├── tests/  
 │ ├── scraper_tests/  
-│ ├── training_tests/
-│ └── prediction_tests/
+│ ├── training_tests/  
+│ └── prediction_tests/  
 ├── logs/  
-│ ├── scrape.log ☑
-│ ├── train.log
-│ └── predict.log
+│ ├── scrape.log ☑  
+│ ├── train.log  
+│ └── predict.log  
 ├── notebooks/  
 ├── scripts/  
-│ ├── run_scraper.py
-│ ├── run_training.py
-│ └── run_prediction.py
-|-- .gitignore
-|-- README.md ☑
-|-- requirements.txt
-|-- setup.py
+│ ├── run_scraper.py  
+│ ├── run_training.py  
+│ └── run_prediction.py  
+|-- .gitignore ☑  
+|-- README.md ☑  
+|-- requirements.txt  
+|-- setup.py  
 
 ## Disclaimer
 
