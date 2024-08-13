@@ -3,6 +3,7 @@ from datetime import datetime
 import glob
 from typing import Tuple
 import logging
+import json
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import confusion_matrix, f1_score, recall_score, precision_score, accuracy_score
 from ta import add_all_ta_features
 
+from architecture import build_model
 
 def setup_logging(log_file: str = 'logs/train.log'):
     log_dir = os.path.dirname(log_file)
@@ -27,13 +29,22 @@ def setup_logging(log_file: str = 'logs/train.log'):
         ]
     )
 
+def load_config(config_path: str = 'src/training/config.json'):
+    with open(config_path, 'r') as file:
+        config = json.load(file)
+    return config
+
 class Trainer:
-    def __init__(self, symbol: str, interval: str, price_delta: float, num_intervals: int, prediction_klines_pct: float):
+    def __init__(self, symbol: str, interval: str, price_delta: float, num_intervals: int, prediction_klines_pct: float,
+                 epochs: int, batch_size: int, patience: int):
         self.symbol = symbol
         self.interval = interval
         self.price_delta = price_delta
         self.num_intervals = num_intervals
         self.prediction_klines_pct = prediction_klines_pct
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.patience = patience
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.model_dir = f'data/models/model_{self.symbol}_{self.interval}_{self.timestamp}'
         self.processed_data_path = f'data/processed/{self.symbol}_{self.interval}.npy'
@@ -163,32 +174,16 @@ class Trainer:
         return x_train_PCA, x_test_PCA, x_dev_PCA
 
     def build_model(self, input_shape: int) -> tf.keras.Model:
-        logging.info("Building the model")
-        inputs = tf.keras.Input(shape=(input_shape,))
-        x = tf.keras.layers.Dropout(0.1)(inputs)
-        x = tf.keras.layers.Dense(128, activation="relu")(x)
-        x = tf.keras.layers.Dense(32, activation="relu")(x)
-        x = tf.keras.layers.Dense(16, activation="relu")(x)
-        outputs = tf.keras.layers.Dense(1, activation="sigmoid")(x)
-        
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
-
-        model.compile(
-            loss='binary_crossentropy',
-            optimizer="Adam",
-            metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
-        )
-
-        return model
+        return build_model(input_shape)
 
     def train_model(self, model: tf.keras.Model, x_train_PCA: np.ndarray, y_train: pd.Series) -> tf.keras.callbacks.History:
         logging.info("Training the model")
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3)
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=self.patience)
 
         history = model.fit(
             x_train_PCA, y_train,
-            batch_size=8,
-            epochs=50,
+            batch_size=self.batch_size,
+            epochs=self.epochs,
             validation_split=0.2,
             shuffle=True,
             callbacks=[early_stopping]
@@ -282,12 +277,23 @@ class Trainer:
         logging.info("Training process completed")
 
 if __name__ == '__main__':
-    setup_logging()
+    config = load_config()
+    setup_logging(config.get('log_file', 'logs/train.log'))
+    
     logging.info("Starting model trainer")
     try:
-        trainer = Trainer(symbol="BTCUSDT", interval="1h", price_delta=1.012, num_intervals=12, prediction_klines_pct=0.2)
+        trainer = Trainer(
+            symbol=config['symbol'],
+            interval=config['interval'],
+            price_delta=config['price_delta'],
+            num_intervals=config['num_intervals'],
+            prediction_klines_pct=config['prediction_klines_pct'],
+            epochs=config['epochs'],
+            batch_size=config['batch_size'],
+            patience=config['patience']
+        )
         trainer.run()
         logging.info("Model trainer process completed successfully")
     except Exception as e:
         logging.exception(f"An error occurred during training: {e}")
-    logging.info("Market Data Trainer process ended")
+    logging.info("Model trainer process ended")
