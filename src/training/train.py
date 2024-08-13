@@ -1,20 +1,26 @@
+import glob
+import json
+import logging
 import os
 from datetime import datetime
-import glob
 from typing import Tuple
-import logging
-import json
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from architecture import build_model
 from sklearn.decomposition import PCA
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import confusion_matrix, f1_score, recall_score, precision_score, accuracy_score
 from ta import add_all_ta_features
 
-from architecture import build_model
 
 def setup_logging(log_file: str = 'logs/train.log'):
     log_dir = os.path.dirname(log_file)

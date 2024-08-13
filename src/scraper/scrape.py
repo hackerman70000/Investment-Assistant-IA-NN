@@ -1,19 +1,24 @@
-import os
+import argparse
 import hashlib
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 from typing import List, Optional
+from zipfile import ZipFile
+
 import pandas as pd
 import requests
-from zipfile import ZipFile
-from datetime import datetime, timedelta
+from config import (
+    DAILY_BASE_URL,
+    DAILY_INTERVALS,
+    EARLIEST_DATE,
+    MONTHLY_BASE_URL,
+    MONTHLY_INTERVALS,
+)
 from requests.exceptions import RequestException
 from tqdm import tqdm
-import logging
-import argparse
-import calendar
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import lru_cache
 
-from config import DAILY_INTERVALS, MONTHLY_INTERVALS, EARLIEST_DATE, MONTHLY_BASE_URL, DAILY_BASE_URL
 
 def setup_logging(log_file: str = 'logs/scrape.log'):
     log_dir = os.path.dirname(log_file)

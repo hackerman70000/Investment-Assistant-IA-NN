@@ -13,9 +13,9 @@ IA-NN/
 │ │ ├── scrape.py ☑  
 │ │ └── config.py ☑  
 │ ├── training/  
-│ │ ├── **init**.py?  
+│ │ ├── **init**.py ☑  
 │ │ ├── train.py ☑  
-│ │ ├── model.py?  
+│ │ ├── architecture.py ☑  
 │ │ └── preprocessing.py?  
 │ └── prediction/  
 │ ├── **init**.py?  
@@ -27,7 +27,7 @@ IA-NN/
 │ └── prediction_tests/  
 ├── logs/  
 │ ├── scrape.log ☑  
-│ ├── train.log  
+│ ├── train.log ☑  
 │ └── predict.log  
 ├── notebooks/  
 ├── scripts/  
