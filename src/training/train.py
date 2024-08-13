@@ -1,213 +1,293 @@
 import os
 from datetime import datetime
 import glob
-import io
+from typing import Tuple
+import logging
 
-import joblib
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from keras.callbacks import EarlyStopping
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix, f1_score, recall_score, precision_score, accuracy_score
 from ta import add_all_ta_features
 
 
-class Training:
-    def __init__(self, symbol, interval, price_delta, num_intervals):
+def setup_logging(log_file: str = 'logs/train.log'):
+    log_dir = os.path.dirname(log_file)
+    os.makedirs(log_dir, exist_ok=True)
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+
+class Trainer:
+    def __init__(self, symbol: str, interval: str, price_delta: float, num_intervals: int, prediction_klines_pct: float):
         self.symbol = symbol
         self.interval = interval
         self.price_delta = price_delta
         self.num_intervals = num_intervals
-        self.timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.dir_name = f'data/models/model_{self.timestamp}'
+        self.prediction_klines_pct = prediction_klines_pct
+        self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.model_dir = f'data/models/model_{self.symbol}_{self.interval}_{self.timestamp}'
+        self.processed_data_path = f'data/processed/{self.symbol}_{self.interval}.npy'
+        
+        logging.info(f"Initializing model trainer for {self.symbol} with interval {self.interval}")
 
-    def preprocess_market_data(self):
-        if not os.path.exists('data/models'):
-            os.makedirs('data/models')
+    def preprocess_market_data(self) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+        logging.info("Starting data preprocessing")
+        os.makedirs('data/models', exist_ok=True)
+        os.makedirs('data/processed', exist_ok=True)
 
-        os.makedirs(self.dir_name)
+        if os.path.exists(self.processed_data_path):
+            logging.info(f"Preprocessed data found at {self.processed_data_path}. Loading data...")
+            data = np.load(self.processed_data_path, allow_pickle=True).item()
+            return (
+                data['x_train'],
+                data['y_train'],
+                data['x_dev'],
+                data['y_dev']
+            )
 
         file_pattern = f'data/raw/{self.symbol}_{self.interval}_*.csv'
         csv_files = glob.glob(file_pattern)
         
         if not csv_files:
-            raise FileNotFoundError(f"No CSV files found matching the pattern: {file_pattern}")
+            logging.error(f"No CSV file found matching the pattern: {file_pattern}")
+            raise FileNotFoundError(f"No CSV file found matching the pattern: {file_pattern}")
         
-        df_list = []
-        for file in csv_files:
-            df = pd.read_csv(file)
-            df_list.append(df)
+        selected_file = max(csv_files, key=lambda f: self._get_date_range(f))
+        logging.info(f"Selected file: {selected_file}")
         
-        df = pd.concat(df_list, ignore_index=True)
+        logging.info("Loading selected CSV file")
+        df = pd.read_csv(selected_file)
 
-        df = df.sort_values(by="Open time")
-        df.reset_index(drop=True, inplace=True)
+        df = df.sort_values(by="Open time").reset_index(drop=True)
 
-        np.seterr(divide='ignore', invalid='ignore')
-        df = add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True)
+        logging.info("Adding technical analysis features")
+        df = add_all_ta_features(
+            df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True
+        )
 
+        logging.info("Creating target variable")
         conditions = [
             (df['Close'] * self.price_delta <= df['High'].shift(-i))
             for i in range(1, self.num_intervals + 1)
         ]
-        conditions_array = np.array(conditions)
-        df['exp'] = np.where(conditions_array.any(axis=0), 1, 0)
+        df['target'] = np.where(np.any(conditions, axis=0), 1, 0)
 
-        print('\nCounts of expected values :')
-        print(df['exp'].value_counts())
+        logging.info('Counts of target values:')
+        logging.info(df['target'].value_counts())
 
-        df.drop(
-            ['High', 'Open', 'Close', 'Low', 'Volume', 'Quote asset volume', 'Number of trades',
-             'Taker buy base asset volume',
-             'Taker buy quote asset volume', 'Ignore', 'Open time', 'Close time'],
-            inplace=True, axis=1)
+        columns_to_drop = [
+            'High', 'Open', 'Close', 'Low', 'Volume', 'Quote asset volume', 'Number of trades',
+            'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore', 'Open time', 'Close time'
+        ]
+        df = df.drop(columns=columns_to_drop).dropna()
 
-        df.dropna(inplace=True)
+        number_of_prediction_klines = int(len(df) * self.prediction_klines_pct)
+        df_train = df.iloc[:-number_of_prediction_klines]
+        df_dev = df.iloc[number_of_prediction_klines:-self.num_intervals]
 
-        number_of_prediction_klines = 1000
-        df_train = df.iloc[:df.shape[0] - number_of_prediction_klines, :]
-        df_dev = df.iloc[df.shape[0] - number_of_prediction_klines:, :]
+        x = df_train.drop(columns=['target'])
+        y = df_train['target']
+        x_dev = df_dev.drop(columns=['target'])
+        y_dev = df_dev['target']
 
-        df_dev = df_dev.drop(df_dev.index[-self.num_intervals:])
+        self._print_nan_occurrences(x, y, x_dev, y_dev)
 
-        df_train.reset_index(drop=True, inplace=True)
-        df_dev.reset_index(drop=True, inplace=True)
-
-        x = df_train.iloc[:, :len(df.columns) - 1]
-        y = df_train['exp']
-
-        x_dev = df_dev.iloc[:, :len(df_dev.columns) - 1]
-        y_dev = df_dev['exp']
-
-        print('\nNaNs occurences:')
-        data_frames = {'x': x, 'y': y, 'x_dev': x_dev, 'y_dev': y_dev}
-        for name, df in data_frames.items():
-            n_missing = df.isnull().sum().sum()
-            if n_missing > 0:
-                print(f"{name}: {n_missing} missing values")
-            else:
-                print(f"{name}: No missing values")
-        print('')
+        logging.info(f"Saving preprocessed data to {self.processed_data_path}")
+        np.save(self.processed_data_path, {'x_train': x, 'y_train': y, 'x_dev': x_dev, 'y_dev': y_dev})
 
         return x, y, x_dev, y_dev
 
-    def split_train_test_data(self, x, y):
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, shuffle=True)
-        return x_train, x_test, y_train, y_test
+    @staticmethod
+    def _get_date_range(filename: str) -> Tuple[datetime, datetime]:
+        parts = filename.split('_')
+        if len(parts) < 4:
+            logging.warning(f"Unexpected filename format: {filename}")
+            return datetime.min, datetime.min
 
-    def scale_data(self, x_train, x_test, x_dev):
+        start_date_str, end_date_str = parts[-2], parts[-1].replace('.csv', '')
+        
+        date_format = "%Y-%m-%d"
+        
+        try:
+            start_date = datetime.strptime(start_date_str, date_format)
+            end_date = datetime.strptime(end_date_str, date_format)
+            return start_date, end_date
+        except ValueError as e:
+            logging.warning(f"Error parsing dates from filename {filename}: {str(e)}")
+            return datetime.min, datetime.min
+
+    @staticmethod
+    def _print_nan_occurrences(*dataframes):
+        logging.info('NaNs occurrences:')
+        for name, df in zip(['x', 'y', 'x_dev', 'y_dev'], dataframes):
+            n_missing = df.isnull().sum().sum()
+            logging.info(f"{name}: {'No' if n_missing == 0 else n_missing} missing values")
+
+    def split_train_test_data(self, x: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        logging.info("Splitting data into train and test sets")
+        return train_test_split(x, y, test_size=0.1, shuffle=True)
+
+    def scale_data(self, x_train: pd.DataFrame, x_test: pd.DataFrame, x_dev: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logging.info("Scaling data")
         scaler = MinMaxScaler(feature_range=(0, 1))
-        scaler.fit(x_train)
-        joblib.dump(scaler, os.path.join(self.dir_name, 'scaler.joblib'))
-
-        x_train_scaled = scaler.transform(x_train)
+        x_train_scaled = scaler.fit_transform(x_train)
         x_test_scaled = scaler.transform(x_test)
         x_dev_scaled = scaler.transform(x_dev)
 
+        os.makedirs(self.model_dir, exist_ok=True)
+        np.save(os.path.join(self.model_dir, 'scaler_scale.npy'), scaler.scale_)
+        np.save(os.path.join(self.model_dir, 'scaler_min.npy'), scaler.min_)
+
         return x_train_scaled, x_test_scaled, x_dev_scaled
 
-    def apply_pca(self, x_train_scaled, x_test_scaled, x_dev_scaled):
+    def apply_pca(self, x_train_scaled: np.ndarray, x_test_scaled: np.ndarray, x_dev_scaled: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        logging.info("Applying PCA")
         pca = PCA(n_components=24)
-        pca.fit(x_train_scaled)
-        joblib.dump(pca, os.path.join(self.dir_name, 'pca.joblib'))
-
-        x_train_PCA = pca.transform(x_train_scaled)
+        x_train_PCA = pca.fit_transform(x_train_scaled)
         x_test_PCA = pca.transform(x_test_scaled)
         x_dev_PCA = pca.transform(x_dev_scaled)
 
+        np.save(os.path.join(self.model_dir, 'pca_components.npy'), pca.components_)
+        np.save(os.path.join(self.model_dir, 'pca_mean.npy'), pca.mean_)
+
         return x_train_PCA, x_test_PCA, x_dev_PCA
 
-    def build_model(self, x_train_PCA, y_train):
-        model = tf.keras.Sequential(
-            [
-                tf.keras.layers.Dropout(0.1),
-                tf.keras.layers.Dense(128, activation="relu"),
-                tf.keras.layers.Dense(32, activation="relu"),
-                tf.keras.layers.Dense(16, activation="relu"),
-                tf.keras.layers.Dense(1, activation="sigmoid"),
-            ]
+    def build_model(self, input_shape: int) -> tf.keras.Model:
+        logging.info("Building the model")
+        inputs = tf.keras.Input(shape=(input_shape,))
+        x = tf.keras.layers.Dropout(0.1)(inputs)
+        x = tf.keras.layers.Dense(128, activation="relu")(x)
+        x = tf.keras.layers.Dense(32, activation="relu")(x)
+        x = tf.keras.layers.Dense(16, activation="relu")(x)
+        outputs = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+        
+        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer="Adam",
+            metrics=[tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
         )
-
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5)
-
-        model.compile(loss='binary_crossentropy', optimizer="Adam", metrics=[tf.keras.metrics.Precision()])
-
-        model.fit(x_train_PCA, y_train, batch_size=1, epochs=2, validation_split=0.2, validation_data=None,
-                  shuffle=True,
-                  callbacks=[early_stopping])
-        print("")
 
         return model
 
-    def evaluate_model(self, model, x_test_PCA, y_test):
-        evaluation = model.evaluate(x_test_PCA, y_test, batch_size=1)
-        print("\ntest loss, test acc:", evaluation)
-        print("")
+    def train_model(self, model: tf.keras.Model, x_train_PCA: np.ndarray, y_train: pd.Series) -> tf.keras.callbacks.History:
+        logging.info("Training the model")
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3)
 
-        model.save(os.path.join(self.dir_name, f'NN_{round(evaluation[1] * 100, 1)}%.h5'))
+        history = model.fit(
+            x_train_PCA, y_train,
+            batch_size=8,
+            epochs=50,
+            validation_split=0.2,
+            shuffle=True,
+            callbacks=[early_stopping]
+        )
+        logging.info("Model training completed")
 
-        return evaluation
+        return history
 
-    def save_results(self, model, x_dev_PCA, y_dev, evaluation):
-        predictions = pd.DataFrame(model.predict(x_dev_PCA), columns=['0-1'])
-        predictions['target'] = y_dev
-        predictions['predictions'] = np.where(predictions['0-1'] > 0.5, 1, 0)
+    def evaluate_model(self, model: tf.keras.Model, x_test_PCA: np.ndarray, y_test: pd.Series) -> Tuple[float, float, float]:
+        logging.info("Evaluating the model")
+        loss, precision, recall = model.evaluate(x_test_PCA, y_test, batch_size=32)
+        f1 = 2 * (precision * recall) / (precision + recall)
+        logging.info(f"Test loss: {loss:.4f}, Test precision: {precision:.4f}, Test recall: {recall:.4f}, Test F1 score: {f1:.4f}")
 
-        pd.set_option('display.max_rows', None)
-        print(predictions)
+        os.makedirs(self.model_dir, exist_ok=True)
+        model.save(os.path.join(self.model_dir, 'NN_model.keras'))
+        logging.info(f"Model saved to {os.path.join(self.model_dir, 'NN_model.keras')}")
 
-        predictions.to_csv(os.path.join(self.dir_name, 'predictions.csv'), index=False)
+        return loss, precision, recall
 
-        m = tf.keras.metrics.Precision()
-        m.update_state(predictions['target'], predictions['predictions'])
+    def save_results(self, model: tf.keras.Model, x_dev_PCA: np.ndarray, y_dev: pd.Series, test_metrics: Tuple[float, float, float]):
+        logging.info(f"Saving results to directory: {self.model_dir}")
+        os.makedirs(self.model_dir, exist_ok=True)
 
-        precision = round(m.result().numpy(), 1)
-        num_good_decision = len(predictions[(predictions['predictions'] == 1) & (predictions['target'] == 1)])
-        num_opportunities = len(predictions[(predictions['target'] == 1)])
-        pct_good_decision = num_good_decision / num_opportunities
+        y_pred = model.predict(x_dev_PCA).flatten()
+        y_pred_binary = (y_pred > 0.5).astype(int)
 
-        print(f"\nVal precision: {str(round(precision * 100, 1))}%")
-        print(f"Test Precision: {str(round(evaluation[1] * 100, 1))}%")
-        print(f"Percentage of taken opportunities: {str(round(pct_good_decision * 100, 1))}%")
+        cm = confusion_matrix(y_dev, y_pred_binary)
+        precision = precision_score(y_dev, y_pred_binary)
+        recall = recall_score(y_dev, y_pred_binary)
+        f1 = f1_score(y_dev, y_pred_binary)
+        accuracy = accuracy_score(y_dev, y_pred_binary)
+        
+        true_positives = cm[1][1]
+        total_positives = np.sum(cm[1])
+        pct_taken_opportunities = true_positives / total_positives if total_positives > 0 else 0
 
-        with open(os.path.join(self.dir_name, 'results.txt'), 'w', encoding='utf-8') as f:
+        self._write_results_to_file(test_metrics, cm, precision, recall, f1, accuracy, pct_taken_opportunities, model)
+        logging.info("Results written to results.txt")
+
+    def _write_results_to_file(self, test_metrics: Tuple[float, float, float], cm: np.ndarray, precision: float, recall: float, f1: float, accuracy: float, pct_taken_opportunities: float, model: tf.keras.Model):
+        with open(os.path.join(self.model_dir, 'results.txt'), 'w', encoding='utf-8') as f:
+            f.write("Market Data Analysis Results\n")
+            f.write("============================\n\n")
+            
+            f.write("Model Configuration\n")
+            f.write("-------------------\n")
             f.write(f"Symbol: {self.symbol}\n")
             f.write(f"Interval: {self.interval}\n")
             f.write(f"Price delta: {self.price_delta}\n")
-            f.write(f"Num intervals: {self.num_intervals}\n\n")
-            f.write(f"Val precision: {str(round(precision * 100, 1))}%\n")
-            f.write(f"Test Precision: {str(round(evaluation[1] * 100, 1))}%\n")
-            f.write(f"Percentage of taken opportunities: {str(round(pct_good_decision * 100, 1))}%\n\n")
+            f.write(f"Number of intervals: {self.num_intervals}\n")
+            f.write(f"Prediction klines percentage: {self.prediction_klines_pct:.2%}\n\n")
             
-            # Capture model summary in a string
-            summary_string = io.StringIO()
-            model.summary(print_fn=lambda x: summary_string.write(x + '\n'))
-            f.write(summary_string.getvalue())
-
-        final_dir_name = f'data/models/model_P-{round(precision * 100, 2)}%_O-{round(pct_good_decision * 100, 2)}%'
-
-        try:
-            os.rename(self.dir_name, final_dir_name)
-        except FileNotFoundError:
-            print(f"Directory '{self.dir_name}' not found")
-        except FileExistsError:
-            print(f"Directory '{final_dir_name}' already exists")
-            os.rename(self.dir_name, f'{final_dir_name}_{self.timestamp}')
-        except OSError as e:
-            print(f"Error: {e}")
-
+            f.write("Test Set Metrics\n")
+            f.write("-----------------\n")
+            f.write(f"Loss: {test_metrics[0]:.4f}\n")
+            f.write(f"Precision: {test_metrics[1]:.4f}\n")
+            f.write(f"Recall: {test_metrics[2]:.4f}\n")
+            f.write(f"F1 Score: {2 * (test_metrics[1] * test_metrics[2]) / (test_metrics[1] + test_metrics[2]):.4f}\n\n")
+            
+            f.write("Validation Set Metrics\n")
+            f.write("-----------------------\n")
+            f.write(f"Accuracy: {accuracy:.4f}\n")
+            f.write(f"Precision: {precision:.4f}\n")
+            f.write(f"Recall: {recall:.4f}\n")
+            f.write(f"F1 Score: {f1:.4f}\n")
+            f.write(f"Percentage of Taken Opportunities: {pct_taken_opportunities:.2%}\n\n")
+            
+            f.write("Confusion Matrix\n")
+            f.write("-----------------\n")
+            f.write("    Predicted\n")
+            f.write("    0    1\n")
+            f.write(f"0   {cm[0][0]:<4} {cm[0][1]:<4}\n")
+            f.write(f"1   {cm[1][0]:<4} {cm[1][1]:<4}\n\n")
+            
+            f.write("Model Summary\n")
+            f.write("--------------\n")
+            model.summary(print_fn=lambda x: f.write(x + '\n'))
 
     def run(self):
+        logging.info("Starting the training process")
         x, y, x_dev, y_dev = self.preprocess_market_data()
         x_train, x_test, y_train, y_test = self.split_train_test_data(x, y)
         x_train_scaled, x_test_scaled, x_dev_scaled = self.scale_data(x_train, x_test, x_dev)
         x_train_PCA, x_test_PCA, x_dev_PCA = self.apply_pca(x_train_scaled, x_test_scaled, x_dev_scaled)
-        model = self.build_model(x_train_PCA, y_train)
-        evaluation = self.evaluate_model(model, x_test_PCA, y_test)
-        self.save_results(model, x_dev_PCA, y_dev, evaluation)
-
+        
+        model = self.build_model(x_train_PCA.shape[1])
+        self.train_model(model, x_train_PCA, y_train)
+        test_metrics = self.evaluate_model(model, x_test_PCA, y_test)
+        self.save_results(model, x_dev_PCA, y_dev, test_metrics)
+        logging.info("Training process completed")
 
 if __name__ == '__main__':
-    Training(symbol="BTCUSDT", interval="1d", price_delta=1.05, num_intervals=12).run()
+    setup_logging()
+    logging.info("Starting model trainer")
+    try:
+        trainer = Trainer(symbol="BTCUSDT", interval="1h", price_delta=1.012, num_intervals=12, prediction_klines_pct=0.2)
+        trainer.run()
+        logging.info("Model trainer process completed successfully")
+    except Exception as e:
+        logging.exception(f"An error occurred during training: {e}")
+    logging.info("Market Data Trainer process ended")
