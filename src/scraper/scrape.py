@@ -55,9 +55,13 @@ class Scraper:
         self.verify_checksum: bool = verify_checksum
 
         self.data: pd.DataFrame = pd.DataFrame()
+        logging.info(
+            f"Initializing scraper for symbol: {self.symbol}, interval: {self.interval}"
+        )
         self.validate_inputs()
 
     def validate_inputs(self) -> None:
+        logging.info("Validating input parameters")
         if self.interval not in self.DAILY_INTERVALS.union(self.MONTHLY_INTERVALS):
             logging.error(f"Invalid interval: {self.interval}")
             raise ValueError(f"Invalid interval: {self.interval}")
@@ -73,6 +77,7 @@ class Scraper:
             raise ValueError("Start date must be before end date")
 
     def generate_urls(self) -> List[str]:
+        logging.info("Generating URLs for data download")
         urls: List[str] = []
         current_month: datetime = self.start_date.replace(day=1)
         end_month: datetime = min(self.end_date, datetime.now()).replace(
@@ -90,10 +95,12 @@ class Scraper:
                 last_day: datetime = (current_month + timedelta(days=32)).replace(
                     day=1
                 ) - timedelta(days=1)
-                urls.extend(self.generate_daily_urls(current_month, last_day))
+                daily_urls = self.generate_daily_urls(current_month, last_day)
+                urls.extend(daily_urls)
 
             current_month = (current_month + timedelta(days=32)).replace(day=1)
 
+        logging.info(f"Generated {len(urls)} URLs")
         return urls
 
     def generate_daily_urls(
@@ -110,9 +117,16 @@ class Scraper:
 
     @staticmethod
     def check_url_exists(url: str) -> bool:
+        logging.debug(f"Checking if URL exists: {url}")
         try:
-            return requests.head(url, allow_redirects=True).status_code == 200
-        except RequestException:
+            exists = requests.head(url, allow_redirects=True).status_code == 200
+            if exists:
+                logging.debug(f"URL exists: {url}")
+            else:
+                logging.debug(f"URL does not exist: {url}")
+            return exists
+        except RequestException as e:
+            logging.error(f"Error checking URL {url}: {e}")
             return False
 
     @staticmethod
@@ -122,7 +136,7 @@ class Scraper:
             response.raise_for_status()
             return response.content
         except RequestException as e:
-            logging.error(f"Error fetching data from Binance API: {e}")
+            logging.error(f"Error fetching data from {url}: {e}")
             return None
 
     @staticmethod
@@ -135,21 +149,29 @@ class Scraper:
 
     @staticmethod
     def calculate_sha256(file_path: str) -> Optional[str]:
+        logging.info(f"Calculating SHA256 for {file_path}")
         sha256 = hashlib.sha256()
         try:
             with open(file_path, "rb") as file:
                 for chunk in iter(lambda: file.read(8192), b""):
                     sha256.update(chunk)
+            logging.info(f"SHA256 calculated for {file_path}")
             return sha256.hexdigest()
         except IOError as e:
             logging.error(f"Error calculating checksum for {file_path}: {e}")
             return None
 
     def verify_checksum_file(self, zip_file_path: str, checksum_file_path: str) -> bool:
+        logging.info(f"Verifying checksum for {zip_file_path}")
         try:
             with open(checksum_file_path, "r") as file:
                 expected_checksum = file.read().split()[0]
-            return expected_checksum == self.calculate_sha256(zip_file_path)
+            match = expected_checksum == self.calculate_sha256(zip_file_path)
+            if match:
+                logging.info(f"Checksum verified for {zip_file_path}")
+            else:
+                logging.warning(f"Checksum mismatch for {zip_file_path}")
+            return match
         except IOError as e:
             logging.error(f"Error verifying checksum: {e}")
             return False
@@ -180,12 +202,12 @@ class Scraper:
         df["Close time"] = pd.to_datetime(df["Close time"], unit="ms")
 
         df = df[df["Open time"] >= self.start_date]
-
         return df
 
     def download_and_process_url(self, url: str) -> pd.DataFrame:
         zip_content = self.download_file(url)
         if zip_content is None:
+            logging.warning(f"Failed to download content from {url}")
             return pd.DataFrame()
 
         zip_file_path = os.path.join(self.directory, os.path.basename(url))
@@ -200,6 +222,9 @@ class Scraper:
                 )
                 self.save_file(checksum_content, checksum_file_path)
                 if not self.verify_checksum_file(zip_file_path, checksum_file_path):
+                    logging.warning(
+                        f"Checksum verification failed for {zip_file_path}. Deleting file."
+                    )
                     os.remove(zip_file_path)
                     os.remove(checksum_file_path)
                     return pd.DataFrame()

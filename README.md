@@ -16,7 +16,7 @@ IA-NN/
 │ │ ├── **init**.py ☑  
 │ │ ├── train.py ☑  
 │ │ ├── architecture.py ☑  
-│ │ └── preprocessing.py?  
+│ │ └── preprocess.py ☑  
 │ └── prediction/  
 │ ├── **init**.py?  
 │ ├── predict.py ☑  
