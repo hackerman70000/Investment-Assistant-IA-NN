@@ -2,6 +2,7 @@ import glob
 import json
 import logging
 import os
+import shutil
 from datetime import datetime
 from typing import Tuple
 
@@ -51,6 +52,7 @@ class Trainer:
         epochs: int,
         batch_size: int,
         patience: int,
+        config_path: str = "src/training/config.json",
     ):
         self.symbol = symbol
         self.interval = interval
@@ -64,6 +66,7 @@ class Trainer:
         self.model_dir = (
             f"data/models/model_{self.symbol}_{self.interval}_{self.timestamp}"
         )
+        self.config_path = config_path
 
         self.preprocessor = Preprocessor(
             symbol, interval, price_delta, num_intervals, prediction_klines_pct
@@ -260,9 +263,9 @@ class Trainer:
             f"Test loss: {loss:.4f}, Test precision: {precision:.4f}, Test recall: {recall:.4f}, Test F1 score: {f1:.4f}"
         )
 
-        os.makedirs(self.model_dir, exist_ok=True)
-        model.save(os.path.join(self.model_dir, "NN_model.keras"))
-        logging.info(f"Model saved to {os.path.join(self.model_dir, 'NN_model.keras')}")
+        artifacts_dir = self._create_artifacts_subdir("artifacts")
+        model.save(os.path.join(artifacts_dir, "NN_model.keras"))
+        logging.info(f"Model saved to {os.path.join(artifacts_dir, 'NN_model.keras')}")
 
         return loss, precision, recall
 
@@ -320,16 +323,6 @@ class Trainer:
             f.write("Market Data Analysis Results\n")
             f.write("============================\n\n")
 
-            f.write("Model Configuration\n")
-            f.write("-------------------\n")
-            f.write(f"Symbol: {self.symbol}\n")
-            f.write(f"Interval: {self.interval}\n")
-            f.write(f"Price delta: {self.price_delta}\n")
-            f.write(f"Number of intervals: {self.num_intervals}\n")
-            f.write(
-                f"Prediction klines percentage: {self.prediction_klines_pct:.2%}\n\n"
-            )
-
             f.write("Test Set Metrics\n")
             f.write("-----------------\n")
             f.write(f"Loss: {test_metrics[0]:.4f}\n")
@@ -356,16 +349,43 @@ class Trainer:
             f.write(f"0   {cm[0][0]:<4} {cm[0][1]:<4}\n")
             f.write(f"1   {cm[1][0]:<4} {cm[1][1]:<4}\n\n")
 
-            f.write("Model Summary\n")
-            f.write("--------------\n")
-            model.summary(print_fn=lambda x: f.write(x + "\n"))
+    def _copy_config_file(self):
+        artifacts_dir = self._create_artifacts_subdir("artifacts")
+        dest_path = os.path.join(artifacts_dir, "config.json")
+        try:
+            shutil.copy2(self.config_path, dest_path)
+            logging.info(f"Configuration file copied to {dest_path}")
+        except FileNotFoundError:
+            logging.error(f"Configuration file not found at {self.config_path}")
+        except PermissionError:
+            logging.error(
+                f"Permission denied when copying configuration file to {dest_path}"
+            )
+        except Exception as e:
+            logging.error(
+                f"An error occurred while copying the configuration file: {str(e)}"
+            )
 
     def _save_preprocessing_artifacts(self, scaler: MinMaxScaler, pca: PCA):
+        artifacts_dir = self._create_artifacts_subdir("artifacts")
+        np.save(os.path.join(artifacts_dir, "scaler_scale.npy"), scaler.scale_)
+        np.save(os.path.join(artifacts_dir, "scaler_min.npy"), scaler.min_)
+        np.save(os.path.join(artifacts_dir, "pca_components.npy"), pca.components_)
+        np.save(os.path.join(artifacts_dir, "pca_mean.npy"), pca.mean_)
+
+    def _create_artifacts_subdir(self, subdir_name: str):
+        subdir_path = os.path.join(self.model_dir, subdir_name)
+        os.makedirs(subdir_path, exist_ok=True)
+        return subdir_path
+
+    def _save_model_summary(self, model: tf.keras.Model):
         os.makedirs(self.model_dir, exist_ok=True)
-        np.save(os.path.join(self.model_dir, "scaler_scale.npy"), scaler.scale_)
-        np.save(os.path.join(self.model_dir, "scaler_min.npy"), scaler.min_)
-        np.save(os.path.join(self.model_dir, "pca_components.npy"), pca.components_)
-        np.save(os.path.join(self.model_dir, "pca_mean.npy"), pca.mean_)
+        summary_path = os.path.join(self.model_dir, "architecture.txt")
+
+        with open(summary_path, "w", encoding="utf-8") as f:
+            model.summary(print_fn=lambda x: f.write(x + "\n"))
+
+        logging.info(f"Model summary saved to {summary_path}")
 
     def run(self):
         x, y, x_dev, y_dev = self.preprocessor.preprocess_market_data()
@@ -384,6 +404,8 @@ class Trainer:
         self.train_model(model, x_train_PCA, y_train)
         test_metrics = self.evaluate_model(model, x_test_PCA, y_test)
         self.save_results(model, x_dev_PCA, y_dev, test_metrics)
+        self._copy_config_file()
+        self._save_model_summary(model)
         logging.info("Training process completed")
 
 
