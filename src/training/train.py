@@ -116,7 +116,7 @@ class Trainer:
             low="Low",
             close="Close",
             volume="Volume",
-            fillna=True,
+            fillna=False,
         )
 
         logging.info("Creating target variable")
@@ -157,6 +157,13 @@ class Trainer:
         y_dev = df_dev["target"]
 
         self._print_nan_occurrences(x, y, x_dev, y_dev)
+
+        feature_order = x.columns.tolist()
+        artifacts_dir = self._create_artifacts_subdir("artifacts")
+        joblib.dump(feature_order, os.path.join(artifacts_dir, "feature_order.joblib"))
+        logging.info(
+            f"Feature order saved to {os.path.join(artifacts_dir, 'feature_order.joblib')}"
+        )
 
         logging.info(f"Saving preprocessed data to {self.processed_data_path}")
         np.save(
@@ -397,6 +404,13 @@ class Trainer:
         )
 
         self._save_preprocessing_artifacts(scaler, pca)
+
+        feature_order = x.columns.tolist()
+        artifacts_dir = self._create_artifacts_subdir("artifacts")
+        joblib.dump(feature_order, os.path.join(artifacts_dir, "feature_order.joblib"))
+        logging.info(
+            f"Feature order saved to {os.path.join(artifacts_dir, 'feature_order.joblib')}"
+        )
 
         model = self.build_model(x_train_PCA.shape[1])
         logging.info("Starting the training process")
