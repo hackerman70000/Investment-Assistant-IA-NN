@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import logging
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -9,15 +10,18 @@ from zipfile import ZipFile
 
 import pandas as pd
 import requests
-from config import (
+from requests.exceptions import RequestException
+from tqdm import tqdm
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+from src.scraper.config import (
     DAILY_BASE_URL,
     DAILY_INTERVALS,
     EARLIEST_DATE,
     MONTHLY_BASE_URL,
     MONTHLY_INTERVALS,
 )
-from requests.exceptions import RequestException
-from tqdm import tqdm
 
 
 def setup_logging(log_file: str = "logs/scrape.log"):

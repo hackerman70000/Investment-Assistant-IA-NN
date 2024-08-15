@@ -6,6 +6,7 @@ import shutil
 from datetime import datetime
 from typing import Tuple
 
+import joblib
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -64,7 +65,7 @@ class Trainer:
         self.patience = patience
         self.timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.model_dir = (
-            f"data/models/model_{self.symbol}_{self.interval}_{self.timestamp}"
+            f"models/training/model_{self.symbol}_{self.interval}_{self.timestamp}"
         )
         self.config_path = config_path
 
@@ -141,6 +142,8 @@ class Trainer:
             "Ignore",
             "Open time",
             "Close time",
+            "trend_psar_up",
+            "trend_psar_down",
         ]
         df = df.drop(columns=columns_to_drop).dropna()
 
@@ -207,8 +210,7 @@ class Trainer:
         x_dev_scaled = scaler.transform(x_dev)
 
         os.makedirs(self.model_dir, exist_ok=True)
-        np.save(os.path.join(self.model_dir, "scaler_scale.npy"), scaler.scale_)
-        np.save(os.path.join(self.model_dir, "scaler_min.npy"), scaler.min_)
+        joblib.dump(scaler, os.path.join(self.model_dir, "scaler.joblib"))
 
         return x_train_scaled, x_test_scaled, x_dev_scaled
 
@@ -224,8 +226,7 @@ class Trainer:
         x_test_PCA = pca.transform(x_test_scaled)
         x_dev_PCA = pca.transform(x_dev_scaled)
 
-        np.save(os.path.join(self.model_dir, "pca_components.npy"), pca.components_)
-        np.save(os.path.join(self.model_dir, "pca_mean.npy"), pca.mean_)
+        joblib.dump(pca, os.path.join(self.model_dir, "pca.joblib"))
 
         return x_train_PCA, x_test_PCA, x_dev_PCA
 
@@ -368,10 +369,8 @@ class Trainer:
 
     def _save_preprocessing_artifacts(self, scaler: MinMaxScaler, pca: PCA):
         artifacts_dir = self._create_artifacts_subdir("artifacts")
-        np.save(os.path.join(artifacts_dir, "scaler_scale.npy"), scaler.scale_)
-        np.save(os.path.join(artifacts_dir, "scaler_min.npy"), scaler.min_)
-        np.save(os.path.join(artifacts_dir, "pca_components.npy"), pca.components_)
-        np.save(os.path.join(artifacts_dir, "pca_mean.npy"), pca.mean_)
+        joblib.dump(scaler, os.path.join(artifacts_dir, "scaler.joblib"))
+        joblib.dump(pca, os.path.join(artifacts_dir, "pca.joblib"))
 
     def _create_artifacts_subdir(self, subdir_name: str):
         subdir_path = os.path.join(self.model_dir, subdir_name)
