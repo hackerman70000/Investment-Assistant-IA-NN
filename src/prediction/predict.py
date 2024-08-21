@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 from typing import Any, Dict
@@ -38,6 +39,7 @@ class PredictionModel:
             f"{self.directory}/{self.filename}_{self.symbol}_{self.interval}.csv"
         )
         self.model_dir = f"models/prediction/model_{self.symbol}_{self.interval}_latest"
+        self.feature_order = self._load_feature_order(config)
 
         self.entry_price = None
         self.last_datetime = None
@@ -118,6 +120,13 @@ class PredictionModel:
         self.last_datetime = self.df.iloc[-1]["Close time"] + pd.Timedelta(seconds=1)
         self.last_datetime = self.last_datetime.replace(microsecond=0, tzinfo=None)
 
+    def _load_feature_order(self, config: Dict[str, Any]):
+        artifacts_dir = os.path.join(self.model_dir, "artifacts")
+        json_path = os.path.join(artifacts_dir, "feature_order.json")
+        with open(json_path, "r") as f:
+            data = json.load(f)
+        return data["columns"]
+
     def save_market_data_to_csv(self):
         os.makedirs(self.directory, exist_ok=True)
         try:
@@ -180,11 +189,7 @@ class PredictionModel:
         try:
             pca = joblib.load(os.path.join(artifacts_dir, "pca.joblib"))
             scaler = joblib.load(os.path.join(artifacts_dir, "scaler.joblib"))
-
-            feature_order = joblib.load(
-                os.path.join(artifacts_dir, "feature_order.joblib")
-            )
-            self.x_pred = self.x_pred[feature_order]
+            self.x_pred = self.x_pred[self.feature_order]
 
             self.x_pred_scaled = scaler.transform(self.x_pred)
             self.x_pred_PCA = pca.transform(self.x_pred_scaled)
