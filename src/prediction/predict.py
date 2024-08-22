@@ -24,7 +24,7 @@ def setup_logging(log_file: str = "logs/predict.log"):
     )
 
 
-class PredictionModel:
+class Prediction:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.symbol = config["symbol"]
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         "timezone": "Europe/Warsaw",
         "limit": 1000,
         "directory": "data/raw",
-        "filename": "market_data",
+        "filename": "latest_market_data",
     }
-    model = PredictionModel(config)
+    model = Prediction(config)
     model.run_prediction()

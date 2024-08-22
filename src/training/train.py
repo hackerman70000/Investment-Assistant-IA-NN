@@ -228,7 +228,7 @@ class Trainer:
         logging.info(f"Model summary saved to {summary_path}")
 
     def run(self):
-        x, y, x_dev, y_dev = self.preprocessor.preprocess_market_data()
+        x, y, x_dev, y_dev = self.preprocessor.preprocess_data()
         x_train, x_test, y_train, y_test = self.preprocessor.split_train_test_data(x, y)
         x_train_scaled, x_test_scaled, x_dev_scaled, _ = self.preprocessor.scale_data(
             x_train, x_test, x_dev

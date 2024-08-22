@@ -34,7 +34,7 @@ class Preprocessor:
             f"Preprocessor initialized for {self.symbol} with interval {self.interval}"
         )
 
-    def preprocess_market_data(
+    def preprocess_data(
         self,
     ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
         logging.info("Starting data preprocessing")

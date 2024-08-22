@@ -262,11 +262,11 @@ class Scraper:
         if not self.data.empty:
             self.data = self.data[self.data["Open time"] <= self.end_date]
             self.data.sort_values("Open time", inplace=True)
-            self.save_market_data_to_csv()
+            self.save_data_to_csv()
         else:
             logging.warning("No data was downloaded.")
 
-    def save_market_data_to_csv(self) -> None:
+    def save_data_to_csv(self) -> None:
         if self.data.empty:
             logging.warning("No data to save.")
             return
@@ -286,7 +286,7 @@ class Scraper:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scrape market data from Binance")
     parser.add_argument("--symbol", type=str, default="BTCUSDT", help="Trading symbol")
-    parser.add_argument("--interval", type=str, default="1d", help="Data interval")
+    parser.add_argument("--interval", type=str, default="1h", help="Data interval")
     parser.add_argument(
         "--start_date",
         type=lambda s: datetime.strptime(s, "%Y-%m-%d"),
