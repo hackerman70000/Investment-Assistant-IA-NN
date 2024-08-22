@@ -39,7 +39,7 @@ class PredictionModel:
             f"{self.directory}/{self.filename}_{self.symbol}_{self.interval}.csv"
         )
         self.model_dir = f"models/prediction/model_{self.symbol}_{self.interval}_latest"
-        self.feature_order = self._load_feature_order(config)
+        self.feature_order = self._load_feature_order()
 
         self.entry_price = None
         self.last_datetime = None
@@ -120,7 +120,7 @@ class PredictionModel:
         self.last_datetime = self.df.iloc[-1]["Close time"] + pd.Timedelta(seconds=1)
         self.last_datetime = self.last_datetime.replace(microsecond=0, tzinfo=None)
 
-    def _load_feature_order(self, config: Dict[str, Any]):
+    def _load_feature_order(self):
         artifacts_dir = os.path.join(self.model_dir, "artifacts")
         json_path = os.path.join(artifacts_dir, "feature_order.json")
         with open(json_path, "r") as f:
@@ -164,21 +164,7 @@ class PredictionModel:
             fillna=True,
         )
 
-        columns_to_keep = set(self.df.columns) - {
-            "High",
-            "Open",
-            "Close",
-            "Low",
-            "Volume",
-            "Quote asset volume",
-            "Number of trades",
-            "Taker buy base asset volume",
-            "Taker buy quote asset volume",
-            "Ignore",
-            "Open time",
-            "Close time",
-        }
-        self.df = self.df[list(columns_to_keep)].dropna()
+        self.df = self.df[self.feature_order].dropna()
 
         self.x_pred = self.df.iloc[-1:, :]
         logging.info(f"Preprocessed data shape: {self.x_pred.shape}")
@@ -189,7 +175,6 @@ class PredictionModel:
         try:
             pca = joblib.load(os.path.join(artifacts_dir, "pca.joblib"))
             scaler = joblib.load(os.path.join(artifacts_dir, "scaler.joblib"))
-            self.x_pred = self.x_pred[self.feature_order]
 
             self.x_pred_scaled = scaler.transform(self.x_pred)
             self.x_pred_PCA = pca.transform(self.x_pred_scaled)

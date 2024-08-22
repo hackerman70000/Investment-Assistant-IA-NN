@@ -40,16 +40,6 @@ class Preprocessor:
         logging.info("Starting data preprocessing")
         os.makedirs("data/processed", exist_ok=True)
 
-        if os.path.exists(self.processed_data_path):
-            logging.info(
-                f"Preprocessed data found at {self.processed_data_path}. Loading data..."
-            )
-            data = np.load(self.processed_data_path, allow_pickle=True).item()
-            logging.info(
-                f"Loaded preprocessed data with shapes: x_train: {data['x_train'].shape}, y_train: {data['y_train'].shape}, x_dev: {data['x_dev'].shape}, y_dev: {data['y_dev'].shape}"
-            )
-            return (data["x_train"], data["y_train"], data["x_dev"], data["y_dev"])
-
         df = self._load_csv_data()
         df = self._add_technical_features(df)
         df = self._create_target_variable(df)
