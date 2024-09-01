@@ -24,6 +24,13 @@ def setup_logging(log_file: str = "logs/predict.log"):
     )
 
 
+def load_config(symbol: str, interval: str) -> Dict[str, Any]:
+    config_path = f"models/prediction/model_{symbol}_{interval}/artifacts/config.json"
+    with open(config_path, "r") as file:
+        config = json.load(file)
+    return config
+
+
 class Prediction:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -31,10 +38,10 @@ class Prediction:
         self.interval = config["interval"]
         self.price_delta = config["price_delta"]
         self.num_intervals = config["num_intervals"]
-        self.timezone = pytz.timezone(config["timezone"])
-        self.limit = config["limit"]
-        self.directory = config["directory"]
-        self.filename = config["filename"]
+        self.timezone = pytz.timezone("Europe/Warsaw")
+        self.limit = 1000
+        self.directory = "data/raw"
+        self.filename = "latest_market_data"
         self.path = (
             f"{self.directory}/{self.filename}_{self.symbol}_{self.interval}.csv"
         )
@@ -215,15 +222,6 @@ class Prediction:
 
 if __name__ == "__main__":
     setup_logging()
-    config = {
-        "symbol": "BTCUSDT",
-        "interval": "1h",
-        "price_delta": 1.015,
-        "num_intervals": 12,
-        "timezone": "Europe/Warsaw",
-        "limit": 1000,
-        "directory": "data/raw",
-        "filename": "latest_market_data",
-    }
+    config = load_config("BTCUSDT", "1h")
     model = Prediction(config)
     model.run_prediction()
