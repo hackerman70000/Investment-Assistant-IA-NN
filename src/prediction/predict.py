@@ -38,7 +38,7 @@ class Prediction:
         self.path = (
             f"{self.directory}/{self.filename}_{self.symbol}_{self.interval}.csv"
         )
-        self.model_dir = f"models/prediction/model_{self.symbol}_{self.interval}_latest"
+        self.model_dir = f"models/prediction/model_{self.symbol}_{self.interval}"
         self.feature_order = self._load_feature_order()
 
         self.entry_price = None

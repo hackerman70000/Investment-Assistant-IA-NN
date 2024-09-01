@@ -249,7 +249,7 @@ class Trainer:
 
 if __name__ == "__main__":
     config = load_config()
-    setup_logging(config.get("log_file", "logs/train.log"))
+    setup_logging()
 
     logging.info("Starting model trainer")
     try:
