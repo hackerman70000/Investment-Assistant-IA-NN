@@ -1,0 +1,10 @@
+{
+    "symbol": "BTCUSDT",
+    "interval": "1h",
+    "price_delta": 1.012,
+    "num_intervals": 12,
+    "prediction_klines_pct": 0.2,
+    "epochs": 50,
+    "batch_size": 8,
+    "patience": 3
+}
